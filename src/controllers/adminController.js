@@ -3,29 +3,29 @@ const jwt = require('jsonwebtoken');
 const generateToken = require('../utils/generateToken');
 
 // Admin Registration
-async function registerAdmin(req, res) {
-    try {
-        const { email, password } = req.body;
+// async function registerAdmin(req, res) {
+//     try {
+//         const { email, password } = req.body;
 
-        // Validate input
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Please provide both email and password' });
-        }
+//         // Validate input
+//         if (!email || !password) {
+//             return res.status(400).json({ message: 'Please provide both email and password' });
+//         }
 
-        // Check if the admin already exists
-        const existingAdmin = await Admin.findOne({ email });
-        if (existingAdmin) {
-            return res.status(400).json({ message: 'Email already registered' });
-        }
+//         // Check if the admin already exists
+//         const existingAdmin = await Admin.findOne({ email });
+//         if (existingAdmin) {
+//             return res.status(400).json({ message: 'Email already registered' });
+//         }
 
-        // Create new admin
-        const newAdmin = await Admin.create({ email, password });
+//         // Create new admin
+//         const newAdmin = await Admin.create({ email, password });
 
-        res.status(201).json({ message: 'Admin registered successfully', admin: newAdmin });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-}
+//         res.status(201).json({ message: 'Admin registered successfully', admin: newAdmin });
+//     } catch (error) {
+//         res.status(500).json({ message: error.message });
+//     }
+// }
 
 
 // Admin Login
