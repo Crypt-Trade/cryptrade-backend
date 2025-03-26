@@ -2,8 +2,9 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const generateToken = require('../utils/generateToken');
 require('dotenv').config();
-const { findPositionAndAttach } = require('../utils/placeInBinaryTree');
+const { findPositionAndAttach, placeInLeftSideOfTree, placeInRightSideOfTree } = require('../utils/placeInBinaryTree');
 
 // Function to generate unique sponsor ID
 async function generateUniqueSponsorID() {
@@ -219,8 +220,225 @@ async function handleRegisterUser(req, res) {
 }
 
 
+async function handleRegisterUsingLeftLink(req, res) {
+    try {
+        // New user details
+        const {
+            sponsorId,
+            name,
+            mobileNumber,
+            email,
+            password
+        } = req.body;
+
+        // Check all parameters are recieved or not 
+        if (!sponsorId || !name || !mobileNumber || !email || !password) {
+            return res.status(400).json({ message: 'Please provide all required fields' });
+        }
+
+        // Check if the Sponsor ID exists in the database
+        const sponsor = await User.findOne({ mySponsorId: sponsorId });
+        if (!sponsor) { return res.status(400).json({ message: 'Invalid Sponsor ID' }); }
+
+        // Check if email is already registered
+        let userFound = await User.findOne({ email: email });
+        if (userFound) { return res.status(404).json({ message: 'Email is already registered' }); }
+
+        // Check if Phone is already registered
+        let phoneFound = await User.findOne({ mobileNumber: mobileNumber });
+        if (phoneFound) { return res.status(404).json({ message: 'Phone number is already registered' }); }
+
+
+        // Generate a unique mySponsorId
+        let generatedSponsorId = await generateUniqueSponsorID();
+        const leftRefferalLink = `https://myudbhab.in/signupleft/${generatedSponsorId}`;
+        const rightRefferalLink = `https://myudbhab.in/signupright/${generatedSponsorId}`;
+
+        // Generate a unique 5-digit key
+        const uniqueKey = await generateUniqueKey();
+
+        // Create new user
+        const newUser = await User.create({
+            sponsorId,
+            name,
+            mobileNumber,
+            email,
+            password,
+            parentSponsorId: '',
+            mySponsorId: generatedSponsorId,
+            leftRefferalLink,
+            rightRefferalLink,
+            uniqueKey
+        });
+
+        // Attach to sponsor's binary tree
+        await placeInLeftSideOfTree(sponsor, newUser);
+        const emailResponse = await sendEmailNotification(email, name, generatedSponsorId, password, uniqueKey);
+
+        if (emailResponse === 'error') {
+            console.error('Failed to send registration email.');
+        }
+        return res.status(201).json({ message: 'User registered successfully', user: newUser });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+
+
+async function handleRegisterUsingRightLink(req, res) {
+    try {
+        // New user details
+        const {
+            sponsorId,
+            name,
+            mobileNumber,
+            email,
+            password
+        } = req.body;
+
+        // Check all parameters are recieved or not 
+        if (!sponsorId || !name || !mobileNumber || !email || !password) {
+            return res.status(400).json({ message: 'Please provide all required fields' });
+        }
+
+        // Check if the Sponsor ID exists in the database
+        const sponsor = await User.findOne({ mySponsorId: sponsorId });
+        if (!sponsor) { return res.status(400).json({ message: 'Invalid Sponsor ID' }); }
+
+        // Check if email is already registered
+        let userFound = await User.findOne({ email: email });
+        if (userFound) { return res.status(404).json({ message: 'Email is already registered' }); }
+
+        // Check if Phone is already registered
+        let phoneFound = await User.findOne({ mobileNumber: mobileNumber });
+        if (phoneFound) { return res.status(404).json({ message: 'Phone number is already registered' }); }
+
+
+        // Generate a unique mySponsorId
+        let generatedSponsorId = await generateUniqueSponsorID();
+        const leftRefferalLink = `https://myudbhab.in/signupleft/${generatedSponsorId}`;
+        const rightRefferalLink = `https://myudbhab.in/signupright/${generatedSponsorId}`;
+
+        // Generate a unique 5-digit key
+        const uniqueKey = await generateUniqueKey();
+
+        // Create new user
+        const newUser = await User.create({
+            sponsorId,
+            name,
+            mobileNumber,
+            email,
+            password,
+            parentSponsorId: '',
+            mySponsorId: generatedSponsorId,
+            leftRefferalLink,
+            rightRefferalLink,
+            uniqueKey
+        });
+
+        // Attach to sponsor's binary tree
+        await placeInRightSideOfTree(sponsor, newUser);
+        const emailResponse = await sendEmailNotification(email, name, generatedSponsorId, password, uniqueKey);
+
+        if (emailResponse === 'error') {
+            console.error('Failed to send registration email.');
+        }
+
+        return res.status(201).json({ message: 'User registered successfully', user: newUser });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+
+
+// 5. Login user
+async function handleLoginUser(req, res) {
+    try {
+        const { sponsorId, password } = req.body;
+        if (!sponsorId || !password) { return res.status(400).json({ message: 'Please enter both sponsorId and password' }); }
+
+        // Check user exists OR not
+        let user = await User.findOne({ mySponsorId: sponsorId });
+        if (!user) { return res.status(404).json({ message: 'User not found' }); }
+
+
+        const isPasswordMatch = await user.comparePassword(password);
+        if (isPasswordMatch) {
+            const payload = { email: user.email, id: user._id, role: 'user' };
+            const token = generateToken(payload);
+            return res.status(200).json({ token, user });
+        } else {
+            return res.status(404).json({ message: 'Incorrect userId OR password.' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
+
+
+
+// 8. Get all sponsor's children with tree-like structure, upto level 4
+async function handleGetSponsorChildrens(req, res) {
+    try {
+        // Find sponsor
+        const sponsor = await User.findOne({ _id: req.params.id });
+        if (!sponsor) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Build the tree
+        const tree = await buildTree(sponsor);
+
+        // Return the tree
+        return res.status(200).json(tree);
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+
+
+
+// helper Recursive function to build the binary tree structure up to level 4
+async function buildTree(user, level = 1) {
+    if (!user || level > 4) return null; // Base case: If no user or level > 4, return null
+
+    const userNode = {
+        _id: user._id,
+        value: user.name,
+        mySponsorId: user.mySponsorId,
+        isActive: user.isActive,
+        leftChild: null,
+        rightChild: null
+    };
+
+    // Only fetch left and right children if the current level is less than 4
+    if (level < 4) {
+        if (user.binaryPosition && user.binaryPosition.left) {
+            const leftChild = await User.findById(user.binaryPosition.left);
+            userNode.leftChild = await buildTree(leftChild, level + 1);
+        }
+
+        if (user.binaryPosition && user.binaryPosition.right) {
+            const rightChild = await User.findById(user.binaryPosition.right);
+            userNode.rightChild = await buildTree(rightChild, level + 1);
+        }
+    }
+
+    return userNode;
+}
+
+
 
 module.exports = {
     handleRegisterFirstUser,
-    handleRegisterUser
+    handleRegisterUser,
+    handleRegisterUsingLeftLink,
+    handleRegisterUsingRightLink,
+    handleLoginUser,
+    handleGetSponsorChildrens
 };
