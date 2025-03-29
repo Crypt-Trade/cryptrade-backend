@@ -185,8 +185,8 @@ async function handleRegisterUser(req, res) {
 
         // Generate a unique mySponsorId
         let generatedSponsorId = await generateUniqueSponsorID();
-        const leftRefferalLink = `https://myudbhab.in/signupleft/${generatedSponsorId}`;
-        const rightRefferalLink = `https://myudbhab.in/signupright/${generatedSponsorId}`;
+        const leftRefferalLink = `http://localhost:5173/signupleft/${generatedSponsorId}`;
+        const rightRefferalLink = `http://localhost:5173/signupright/${generatedSponsorId}`;
 
         // Generate a unique 5-digit key
         const uniqueKey = await generateUniqueKey();
@@ -215,6 +215,21 @@ async function handleRegisterUser(req, res) {
         return res.status(201).json({ message: 'User registered successfully', user: newUser });
     } catch (error) {
         console.error(error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+async function handleVerifySponsor(req, res) {
+    try {
+        const { sponsorId } = req.body;
+        if (!sponsorId) { return res.status(400).json({ message: 'Please provide your Sponsor ID' }); }
+
+        // Check if the Sponsor ID exists in the database
+        const sponsor = await User.findOne({ mySponsorId: sponsorId });
+        if (!sponsor) { return res.status(400).json({ message: 'Invalid Sponsor ID' }); }
+
+        return res.status(200).json({ message: 'Sponsor verified successfully', sponsor: sponsor });
+    } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 }
@@ -432,7 +447,73 @@ async function buildTree(user, level = 1) {
     return userNode;
 }
 
+// 9. Handle extremeLeft 
+async function handleExtremeLeft(req, res) {
+    try {
+        const { sponsorId } = req.body;
+        console.log(sponsorId);
+        
+        if(!sponsorId) { return res.status(404).json({ message: "Please provide sponsor ID." }); }
 
+        // Find the sponsor
+        const user = await User.findOne({mySponsorId: sponsorId});
+        if (!user) { return res.status(404).json({ message: 'Invalid SponsorId.' }); }
+
+        // Find the extreme left user
+        const extremeLeftUser = await findExtremeLeft(user);
+        
+        // Build the tree
+        const tree = await buildTree(extremeLeftUser);
+        return res.status(200).json(tree);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+// helper function to find extreme left user
+async function findExtremeLeft(user) {
+    
+    // Base case: If no left child or no binary position, return the current user
+    if (!user.binaryPosition || !user.binaryPosition.left) return user; 
+
+    // Recursively call the function for the left child
+    const leftChild = await User.findById(user.binaryPosition.left);
+    return await findExtremeLeft(leftChild);
+}
+
+// 10. Handle extremeRight
+async function handleExtremeRight(req, res) {
+    try {
+        const { sponsorId } = req.body;
+        if(!sponsorId) { return res.status(404).json({ message: "Please provide sponsor ID." }); }
+
+        // Find the sponsor
+        const user = await User.findOne({mySponsorId: sponsorId});
+        if (!user) { return res.status(404).json({ message: 'User not found' }); }
+
+        // Find the extreme right user
+        const extremeRightUser = await findExtremeRight(user);
+        
+        // Build the tree
+        const tree = await buildTree(extremeRightUser);
+        return res.status(200).json(tree);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+// helper function to find extreme right user
+async function findExtremeRight(user) {
+    
+    // Base case: If no left child or no binary position, return the current user
+    if (!user.binaryPosition || !user.binaryPosition.right) return user; 
+
+    // Recursively call the function for the left child
+    const rightChild = await User.findById(user.binaryPosition.right);
+    return await findExtremeRight(rightChild);
+}
 
 module.exports = {
     handleRegisterFirstUser,
@@ -440,5 +521,9 @@ module.exports = {
     handleRegisterUsingLeftLink,
     handleRegisterUsingRightLink,
     handleLoginUser,
-    handleGetSponsorChildrens
+    handleGetSponsorChildrens,
+    handleVerifySponsor,
+    handleExtremeLeft,
+    handleExtremeRight
+
 };

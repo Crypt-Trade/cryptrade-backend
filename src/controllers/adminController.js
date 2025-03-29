@@ -27,7 +27,6 @@ async function registerAdmin(req, res) {
     }
 }
 
-
 // Admin Login
 async function loginAdmin(req, res) {
     try {
